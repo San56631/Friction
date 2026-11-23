@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { LogOut, Loader2, MapPin, ThumbsUp, ShieldCheck } from 'lucide-react';
+import { LogOut, Loader2, ChevronRight } from 'lucide-react';
 import { supabase, isSupabaseConfigured } from './lib/supabase';
 
 const DEMO_FLAG = 'friction_demo_mode';
@@ -119,19 +119,18 @@ export function AuthProvider({ children }) {
 }
 
 export function AuthGate({ children }) {
-  const { authUser, isLoading, demoMode } = useAuth();
+  const { isLoading } = useAuth();
   if (isLoading) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center" role="status">
-        <Loader2 className="w-6 h-6 text-teal-600 animate-spin" aria-label="Loading" />
+        <Loader2 className="w-6 h-6 text-brand-teal animate-spin" aria-label="Loading" />
       </div>
     );
   }
-  if (!authUser && !demoMode) return <LoginScreen />;
   return children;
 }
 
-function GoogleLogo() {
+export function GoogleLogo() {
   return (
     <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true">
       <path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.5 5.4 2.6 13.3l7.9 6.1C12.4 13.6 17.7 9.5 24 9.5z" />
@@ -142,92 +141,45 @@ function GoogleLogo() {
   );
 }
 
-function LoginScreen() {
-  const { signInWithGoogle, enterDemoMode, authError } = useAuth();
-  const highlights = [
-    { icon: MapPin, text: 'Pin problems to the exact building and room' },
-    { icon: ThumbsUp, text: 'Confirm issues other students have already reported' },
-    { icon: ShieldCheck, text: 'Moderated, spam-resistant, tracked until resolved' }
-  ];
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-teal-50 via-white to-sky-50 flex items-center justify-center p-4">
-      <div className="w-full max-w-md bg-white border border-slate-200 rounded-3xl shadow-xl shadow-teal-900/5 p-8">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="w-11 h-11 rounded-2xl bg-teal-600 text-white font-black text-xl flex items-center justify-center">
-            F
-          </div>
-          <div>
-            <div className="font-extrabold tracking-tight text-slate-900 text-lg leading-none">FRICTION</div>
-            <div className="text-xs text-slate-500 mt-1">Campus Issue Intelligence</div>
-          </div>
-        </div>
-
-        <h1 className="text-2xl font-bold text-slate-900">Sign in to continue</h1>
-        <p className="text-sm text-slate-600 mt-1.5">
-          Making everyday campus problems impossible to ignore.
-        </p>
-
-        <ul className="mt-5 space-y-2.5">
-          {highlights.map(({ icon: Icon, text }) => (
-            <li key={text} className="flex items-center gap-2.5 text-sm text-slate-700">
-              <span className="w-7 h-7 rounded-lg bg-teal-50 text-teal-700 flex items-center justify-center shrink-0">
-                <Icon className="w-4 h-4" />
-              </span>
-              {text}
-            </li>
-          ))}
-        </ul>
-
-        <button
-          onClick={signInWithGoogle}
-          className="mt-7 w-full inline-flex items-center justify-center gap-3 px-5 py-3 rounded-xl bg-white hover:bg-slate-50 border border-slate-300 text-slate-800 font-semibold text-sm transition cursor-pointer"
-        >
-          <GoogleLogo />
-          Continue with Google
-        </button>
-
-        {authError && (
-          <p role="alert" className="mt-3 text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">
-            {authError}
-          </p>
-        )}
-
-        <button
-          onClick={enterDemoMode}
-          className="mt-4 w-full text-xs text-slate-500 hover:text-teal-700 transition cursor-pointer"
-        >
-          Or explore the demo without signing in
-        </button>
-      </div>
-    </div>
-  );
-}
-
 export function AccountMenu({ onOpenProfile }) {
   const { authUser, signOut } = useAuth();
   if (!authUser) return null;
   return (
-    <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-xl pl-1.5 pr-1 py-1">
-      <button onClick={onOpenProfile} aria-label="Open your profile" className="flex items-center gap-2 rounded-lg hover:bg-slate-50 pr-1 cursor-pointer text-left">
-      {authUser.avatarUrl ? (
-        <img src={authUser.avatarUrl} alt="" referrerPolicy="no-referrer" className="w-7 h-7 rounded-lg object-cover" />
-      ) : (
-        <div className="w-7 h-7 rounded-lg bg-teal-100 text-teal-800 text-[11px] font-bold flex items-center justify-center">
-          {authUser.initials}
+    <div className="space-y-2 w-full">
+      <button
+        onClick={onOpenProfile}
+        aria-label="Open your profile"
+        className="w-full flex items-center justify-between gap-2.5 p-2 rounded-xl bg-white hover:bg-brand-navy-soft/50 border border-slate-200 transition cursor-pointer text-left"
+      >
+        <div className="flex items-center gap-2.5 min-w-0">
+          {authUser.avatarUrl ? (
+            <img
+              src={authUser.avatarUrl}
+              alt=""
+              referrerPolicy="no-referrer"
+              className="w-8 h-8 rounded-lg object-cover shrink-0"
+            />
+          ) : (
+            <div className="w-8 h-8 rounded-lg bg-brand-teal-soft text-brand-navy text-xs font-bold flex items-center justify-center shrink-0">
+              {authUser.initials}
+            </div>
+          )}
+          <div className="min-w-0 leading-tight">
+            <div className="text-xs font-bold text-brand-navy truncate">{authUser.name}</div>
+            <div className="text-[11px] text-slate-500">
+              {authUser.role === 'admin' ? 'Administrator' : 'Student'}
+            </div>
+          </div>
         </div>
-      )}
-      <div className="hidden sm:block leading-tight pr-1">
-        <div className="text-xs font-semibold text-slate-800 max-w-[120px] truncate">{authUser.name}</div>
-        <div className="text-[10px] text-slate-500">{authUser.role === 'admin' ? 'Administrator' : 'Student'}</div>
-      </div>
+        <ChevronRight className="w-4 h-4 text-slate-400 shrink-0" />
       </button>
+
       <button
         onClick={signOut}
-        aria-label="Sign out"
-        title="Sign out"
-        className="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition cursor-pointer"
+        className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl bg-white hover:bg-rose-50 text-slate-700 hover:text-rose-700 border border-slate-200 hover:border-rose-200 text-xs font-semibold transition cursor-pointer"
       >
-        <LogOut className="w-4 h-4" />
+        <LogOut className="w-3.5 h-3.5 shrink-0" />
+        <span>Sign out</span>
       </button>
     </div>
   );

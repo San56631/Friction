@@ -142,6 +142,7 @@ create or replace function public.issues_before_insert() returns trigger
 language plpgsql security definer set search_path = public as $$
 declare prof public.profiles; daily_limit int; recent_count int; auto_publish int;
         blocked_pattern text; combined_text text; hold_reasons text[] := '{}';
+        matched_parent uuid; matched_sim real;
 begin
   perform pg_advisory_xact_lock(hashtext(new.reporter_id::text));
   select * into prof from public.profiles where id = new.reporter_id;
@@ -179,6 +180,21 @@ begin
   new.parent_id := null; new.link_type := null;
   if coalesce(auto_publish, 1) = 1 and cardinality(hold_reasons) = 0 then
     new.status := 'Published'; new.status_reason := null;
+    -- automatic backend duplicate & independent grouping via trigram similarity
+    select i.id, similarity(i.title || ' ' || i.description, combined_text)
+      into matched_parent, matched_sim
+      from public.issues i
+      where i.building_id = new.building_id
+        and i.category = new.category
+        and i.parent_id is null
+        and i.status in ('Published', 'In Progress')
+        and similarity(i.title || ' ' || i.description, combined_text) >= 0.35
+      order by 2 desc
+      limit 1;
+    if matched_parent is not null then
+      new.parent_id := matched_parent;
+      new.link_type := case when matched_sim >= 0.62 then 'true_duplicate' else 'independent' end;
+    end if;
   else
     new.status := 'Pending Review';
     new.status_reason := 'Held for review: ' || case when cardinality(hold_reasons) = 0 then 'automatic publishing is switched off' else array_to_string(hold_reasons, '; ') end;
@@ -191,9 +207,17 @@ create trigger trg_issues_before_insert before insert on public.issues for each 
 create or replace function public.issues_after_insert() returns trigger
 language plpgsql security definer set search_path = public as $$
 declare ref text := 'FRC-' || extract(year from new.created_at)::int || '-' || new.ref_number;
+        parent_ref text;
 begin
   insert into public.audit_log (issue_id, actor_id, actor_name, action)
   values (new.id, new.reporter_id, new.reporter_name, 'Submitted by ' || new.reporter_name);
+  if new.parent_id is not null then
+    select 'FRC-' || extract(year from created_at)::int || '-' || ref_number into parent_ref from public.issues where id = new.parent_id;
+    insert into public.audit_log (issue_id, actor_name, action)
+    values (new.id, 'Auto-Grouping Engine', 'Automatically grouped as ' || replace(new.link_type, '_', ' ') || ' under ' || coalesce(parent_ref, 'canonical issue'));
+    insert into public.audit_log (issue_id, actor_name, action)
+    values (new.parent_id, 'Auto-Grouping Engine', 'Automatically linked ' || ref || ' as ' || replace(new.link_type, '_', ' '));
+  end if;
   if new.status = 'Published' then
     insert into public.audit_log (issue_id, actor_name, action) values (new.id, 'System', 'Auto-published after passing integrity checks');
     insert into public.notifications (user_id, issue_id, title, message, type)
