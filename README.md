@@ -1,45 +1,156 @@
-# FRICTION — Campus Issue Reporting Platform
+# Friction — Campus Issue Intelligence
 
-React + Vite + Tailwind + Supabase (Auth, Postgres, Storage). Signed-in users read and write the real database; demo mode (no `.env.local`) still uses `localStorage`.
+**Friction** is a spatial campus issue reporting, peer-validation, and facilities triage platform built for university campuses (configured for **IGDTUW**). It connects students and campus administrators through a structured feedback loop: students pin issues to exact buildings and rooms, peers confirm shared disruptions in one tap, duplicate reports are automatically clustered in the backend, and facilities teams triage by clear priority tiers and interactive analytics.
 
-## Run it
+---
+
+## Key Features
+
+### Student Portal
+- **Privacy-First Landing Page**: Introduces the platform workflow, transparent priority tiers, and role-based portal entry without exposing live complaint records to unauthenticated visitors.
+- **Home Dashboard**: Live status KPIs, campus resolution progress bar, top **Campus Friction Hotspots** (first 4 with expand toggle), and **Recent Campus Reports** (first 4 with expand toggle) with one-tap *"I'm experiencing this too"* peer confirmation.
+- **Interactive Campus Map**: Powered by **Leaflet** and **OpenStreetMap**, allowing students to inspect building hotspots, filter by category/severity/status, or click anywhere on the map to drop a reverse-geocoded pin and prefill a report.
+- **Structured Issue Reporting**: Guided submission form with real-time duplicate similarity detection, rolling 24-hour anti-spam allowance tracking, impact severity selection, and optional real photo evidence upload (stored in Supabase Storage in production mode).
+- **My Reports & Notifications**: Track submission status (`Pending Review`, `Published`, `In Progress`, `Needs Clarification`, `Resolved`, `Rejected`), respond to admin clarification requests inline, flag inaccurate reports, and view timeline updates.
+
+### Campus Administration
+- **Operations Overview (Visual Analytics)**:
+  - **Highest-Priority Campus Issues**: Interactive priority-ranked horizontal stacked bar chart comparing report volume and peer confirmations.
+  - **Category Share**: Interactive SVG donut chart breaking down reports across 9 campus domains.
+  - **Building Friction Pressure**: Zone coverage donut and clickable building pressure bars that jump directly to the corresponding building in **Campus Map View**.
+  - **Resolution Pipeline & Severity Mix**: Segmented lifecycle distribution and severity breakdown cards, plus recent campus audit activity.
+- **Automatic Backend Grouping**: Incoming submissions are automatically clustered against open canonical reports in the same building and category using similarity scoring (PostgreSQL `pg_trgm` triggers in Supabase mode; token/trigram/room matching in demo mode), eliminating manual duplicate-merging workflows.
+- **Moderation & Flag Queues**: Verify pending submissions, calibrate impact severity, request clarifications, post official admin notes, review community flags, manage daily report quotas, edit content-check rules, and enforce progressive abuse strikes.
+- **Role-Scoped Campus Map View**: Administrators can inspect hotspots, review localized issues, and place or reposition building coordinates (`Place pin` / `Move pin`) without student complaint-submission clutter.
+
+---
+
+## Priority Tiers
+
+Rather than exposing opaque numeric scores to users, Friction translates report volume, peer confirmations, and impact severity internally into four clear triage tiers:
+
+| Tier | Description |
+| :--- | :--- |
+| **Critical Priority** | Immediate safety hazards, accessibility barriers, or high-volume essential utility outages. |
+| **High Priority** | Disruptive issues backed by multiple peer confirmations across classes or labs. |
+| **Medium Priority** | Ongoing facility problems affecting daily routines with partial workarounds. |
+| **Low Priority** | Localized minor inconveniences queued for routine maintenance rounds. |
+
+---
+
+## Tech Stack
+
+- **Frontend**: React 18, TypeScript, Vite, Tailwind CSS, Lucide Icons
+- **Mapping & Geocoding**: Leaflet (`leaflet`), OpenStreetMap tiles, Nominatim reverse geocoding
+- **Backend & Auth (Optional / Production)**: Supabase (Google OAuth, PostgreSQL + `pg_trgm`, Row Level Security, Storage bucket `issue-photos`)
+- **Offline / Demo Persistence**: `localStorage` fallback with instant Student / Admin persona switching when Supabase env vars are not set
+
+---
+
+## Project Structure
+
+```text
+├── public/
+│   └── assets/                  # Brand mark and static public assets
+├── src/
+│   ├── assets/images/           # Bundled hero illustration
+│   ├── components/
+│   │   ├── BrandLogo.tsx        # Symbol + Friction wordmark component
+│   │   ├── CampusMap.tsx        # Leaflet interactive map & building inspector
+│   │   ├── Charts.tsx           # Priority bars, donut charts, pipeline & badges
+│   │   └── LandingPage.tsx      # Public landing page & portal entry
+│   ├── domain/
+│   │   └── friction.ts          # Domain models, seed data, priority tiers & auto-grouping
+│   ├── lib/
+│   │   ├── remoteStore.ts       # Supabase queries, RPC calls & photo uploads
+│   │   └── supabase.ts          # Supabase client initialization
+│   ├── auth.tsx                 # AuthProvider, Google OAuth & AccountMenu
+│   ├── App.tsx                  # Sidebar workspace shell, student & admin views
+│   ├── index.css                # Tailwind entrypoint & theme tokens
+│   └── main.tsx                 # React entrypoint
+├── supabase/
+│   └── schema.sql               # Postgres schema, RLS policies, pg_trgm triggers & storage
+├── .env.example                 # Environment variable template
+├── TESTING.md                   # End-to-end acceptance test checklist
+└── package.json
+```
+
+---
+
+## Getting Started
+
+### Prerequisites
+- Node.js 18+ and npm
+
+### 1. Run Locally (Demo Mode)
+Without environment variables, Friction runs in **Demo Mode** backed by `localStorage` with a built-in Student / Admin persona switcher in the sidebar footer.
+
 ```bash
 npm install
-cp .env.example .env.local     # then fill in the two values below
 npm run dev
 ```
-Without `.env.local` the app runs in demo mode (persona switcher, no sign-in). With it, users land on a Google sign-in screen.
 
-## Google sign-in setup (one time)
+The development server runs on **`http://localhost:3000`**.
 
-1. **Supabase**: create a project. Project Settings → API → copy the Project URL and the anon/publishable key into `.env.local` as `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`.
-2. **Database**: SQL Editor → paste all of `supabase/schema.sql` → Run (safe to re-run). It creates the tables, row-level security, the rules below, and the `issue-photos` storage bucket.
-3. **Google Cloud Console** (console.cloud.google.com):
-   - APIs & Services → OAuth consent screen → External. While in Testing mode, add your teammates' emails under Test users.
-   - Credentials → Create credentials → OAuth client ID → Web application.
-   - Authorized JavaScript origins: `http://localhost:5173` and your Vercel URL.
-   - Authorized redirect URI: `https://YOUR-PROJECT-REF.supabase.co/auth/v1/callback`
-   - Copy the Client ID and Client Secret.
-4. **Supabase** → Authentication → Providers → Google → enable, paste Client ID and Secret, save.
-5. **Supabase** → Authentication → URL Configuration: set Site URL to your Vercel URL and add `http://localhost:5173/**` and `https://YOUR-VERCEL-URL/**` under Redirect URLs.
-6. **Vercel**: add the same two `VITE_` variables under Project Settings → Environment Variables, then redeploy.
-7. **Make yourself admin**: sign in once, then run in the SQL Editor:
-   `update public.profiles set role = 'admin' where email = 'you@example.com';`
+### 2. Build for Production
 
-## Rules enforced by the database (not just the UI)
-- Max 3 new reports per user per rolling 24 hours (`app_settings.daily_report_limit`, admin-editable)
-- One confirmation per user per issue; you cannot confirm your own issue
-- Students cannot change report status, severity or notes; only admins can (RLS)
-- Every rejection needs a reason
-- Three open flags on a published report move it to `Flagged` for review; one flag does not
-- New reports publish automatically unless a content check holds them (link, blocked words, gibberish, repeat, account strike); admins can edit the word list, switch auto-publish off and set the flag threshold
-- Every status/severity/link change and confirmation is written to `audit_log`, and status changes notify the reporter
-- Temporary restrictions: `select public.record_abuse('<user uuid>', 'reason');` (1st = warning, 2nd = 24h, 3rd+ = 7 days)
+```bash
+npm run build
+npm run preview
+```
 
-## Map
-Leaflet + OpenStreetMap. Five buildings have coordinates (CSE & ECE, IT, Computer Centre, Mechanical, Auditorium). For the others, sign in as admin, select the building, click **Place pin**, then click the map. Pins are saved to `public.buildings`. Use **Move pin** to correct a wrong one (check the IT Block pin against the satellite view).
+---
 
-Clicking the map drops a pin and looks up the place name through OpenStreetMap's Nominatim service (fine for demo-scale use; heavy traffic would need a different geocoder). Reports made from a pin are stored with their exact latitude/longitude and show as small severity-coloured dots on the map.
+## Supabase & Google OAuth Setup (Production Mode)
+
+1. **Create a Supabase Project**
+   - Open **Project Settings → API** and copy your **Project URL** and **anon/public key**.
+   - Create `.env.local` from `.env.example`:
+     ```bash
+     cp .env.example .env.local
+     ```
+     Fill in:
+     ```env
+     VITE_SUPABASE_URL=https://your-project-ref.supabase.co
+     VITE_SUPABASE_ANON_KEY=your-anon-key
+     ```
+
+2. **Initialize the Database**
+   - Open the **Supabase SQL Editor**, paste the contents of `supabase/schema.sql`, and run it (idempotent / safe to re-run).
+   - This provisions tables (`profiles`, `app_settings`, `buildings`, `issues`, `confirmations`, `flags`, `admin_notes`, `audit_log`, `notifications`), Row Level Security policies, `pg_trgm` auto-grouping & moderation triggers, and the public `issue-photos` storage bucket.
+
+3. **Configure Google Cloud OAuth**
+   - In [Google Cloud Console](https://console.cloud.google.com/), configure the **OAuth consent screen** (add test users if in Testing mode).
+   - Create an **OAuth Client ID** (**Web application**):
+     - **Authorized JavaScript origins**: `http://localhost:3000` and your deployed app URL
+     - **Authorized redirect URI**: `https://YOUR-PROJECT-REF.supabase.co/auth/v1/callback`
+
+4. **Enable Google Provider in Supabase**
+   - **Authentication → Providers → Google**: enable and enter your Client ID and Client Secret.
+   - **Authentication → URL Configuration**: set your Site URL and add `http://localhost:3000/**` and your deployed URL under Redirect URLs.
+
+5. **Promote an Administrator Account**
+   - Sign in once via Google, then run in the Supabase SQL Editor:
+     ```sql
+     update public.profiles
+     set role = 'admin'
+     where email = 'you@example.com';
+     ```
+
+---
+
+## Database-Enforced Integrity Rules
+
+In Supabase mode, rules are enforced directly at the database level via PostgreSQL triggers and RLS policies:
+- **Anti-Spam Rate Limit**: Configurable max reports per rolling 24 hours per student (`app_settings.daily_report_limit`, default `3`).
+- **One-Tap Peer Confirmation**: One confirmation per user per issue; reporters cannot confirm their own submission.
+- **Automatic Similarity Clustering**: `issues_before_insert` / `issues_after_insert` triggers use `pg_trgm` text similarity within the same `building_id` and `category` to link duplicates (`>= 0.62`) or related observations (`0.35–0.62`) automatically.
+- **Auto-Moderation & Flagging**: Submissions with links, blocked words, gibberish, or active account strikes are held for review; reaching the open-flag threshold moves published reports to `Flagged` without deleting records.
+- **Strict Role Access Control**: Only administrators can modify issue status, severity, official notes, building coordinates, or account restrictions (`record_abuse` / `lift_restriction`).
+- **Audit & Notification Trail**: Every status, severity, auto-grouping, and confirmation event is logged to `audit_log` and generates reporter notifications.
+
+---
 
 ## Testing
-See `TESTING.md` for a step-by-step check of every acceptance test in the brief.
+
+See [`TESTING.md`](./TESTING.md) for a step-by-step verification checklist covering student reporting, peer confirmation, map pinning, moderation queues, abuse enforcement, and auto-grouping.
